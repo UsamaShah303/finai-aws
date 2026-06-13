@@ -7,9 +7,8 @@ on:
       - master
 
 jobs:
-  # 1. Deploy AWS Infrastructure via Terraform
-  deploy-infrastructure:
-    name: Terraform Apply
+  deploy-all:
+    name: Full Stack AWS Deployment
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -34,113 +33,40 @@ jobs:
         with:
           terraform_version: 1.5.0
 
-      - name: Terraform Init
+      - name: Terraform Init & Apply
         working-directory: ./infra
-        run: terraform init
-
-      - name: Import and clean orphaned resources
-        working-directory: ./infra
-        continue-on-error: true
         run: |
-          # Import Lambda
-          terraform import aws_lambda_function.flask_api finai-flask-api || true
-
-          # Remove old Lambda permission so Terraform can recreate it
-          aws lambda remove-permission --function-name finai-flask-api --statement-id AllowExecutionFromAPIGateway || true
-
-          # Clean up old API Gateway completely (delete from state + AWS, let terraform recreate)
-          terraform state rm aws_apigatewayv2_route.default_route || true
-          terraform state rm aws_apigatewayv2_integration.lambda_integration || true
-          terraform state rm aws_apigatewayv2_stage.default_stage || true
-          terraform state rm aws_lambda_permission.api_gw_invoke || true
-          terraform state rm aws_apigatewayv2_api.http_api || true
-
-          API_ID=$(aws apigatewayv2 get-apis --query "Items[?Name=='finai-api-gateway'].ApiId" --output text 2>/dev/null)
-          if [ -n "$API_ID" ] && [ "$API_ID" != "None" ]; then
-            aws apigatewayv2 delete-api --api-id $API_ID || true
-          fi
-
-          # Import Cognito
-          POOL_ID=$(aws cognito-idp list-user-pools --max-results 10 --query "UserPools[?Name=='finai-user-pool'].Id" --output text 2>/dev/null)
-          if [ -n "$POOL_ID" ] && [ "$POOL_ID" != "None" ]; then
-            terraform import aws_cognito_user_pool.finai_pool $POOL_ID || true
-            CLIENT_ID=$(aws cognito-idp list-user-pool-clients --user-pool-id $POOL_ID --query "UserPoolClients[0].ClientId" --output text 2>/dev/null)
-            if [ -n "$CLIENT_ID" ] && [ "$CLIENT_ID" != "None" ]; then
-              terraform import aws_cognito_user_pool_client.finai_client $POOL_ID/$CLIENT_ID || true
-            fi
-          fi
-
-          # Import IAM
-          terraform import aws_iam_role_policy.lambda_dynamodb_s3 finai-lambda-role-final:finai-lambda-policy-final || true
-
-      - name: Terraform Apply
-        working-directory: ./infra
-        run: terraform apply -auto-approve
-
-
-  # 2. Deploy React Frontend to S3 & CloudFront
-  deploy-frontend:
-    name: Build & Deploy Frontend
-    needs: deploy-infrastructure
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2
+          terraform init
+          terraform apply -auto-approve
 
       - name: Install Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '22'
 
-      - name: Install Dependencies
+      - name: Build & Deploy React Frontend
         working-directory: ./frontend
-        run: npm install
+        run: |
+          npm install
+          npm run build
+          
+          # Fetch dynamic names from Terraform state
+          cd ../infra
+          FRONTEND_BUCKET=$(terraform output -raw frontend_bucket_name)
+          CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
+          cd ../frontend
 
-      - name: Build React App
-        working-directory: ./frontend
-        run: npm run build
+          aws s3 sync dist/ s3://$FRONTEND_BUCKET --delete
+          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths "/*"
         env:
           VITE_API_URL: ${{ secrets.PROD_API_URL }}
-
-      - name: Deploy to Amazon S3
-        working-directory: ./frontend
-        run: |
-          aws s3 sync dist/ s3://${{ secrets.AWS_S3_FRONTEND_BUCKET }} --delete
-
-      - name: Invalidate CloudFront Cache
-        run: |
-          aws cloudfront create-invalidation --distribution-id ${{ secrets.AWS_CLOUDFRONT_ID }} --paths "/*"
-
-
-  # 3. Deploy Flask Backend to AWS Lambda
-  deploy-backend:
-    name: Build & Deploy Backend (Lambda)
-    needs: deploy-infrastructure
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      - name: Install Dependencies & Deploy via Zappa
+      - name: Build & Deploy Flask Backend (Lambda)
         working-directory: ./backend
         run: |
           python -m venv venv

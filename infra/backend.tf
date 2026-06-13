@@ -41,7 +41,10 @@ resource "aws_iam_role_policy" "lambda_dynamodb_s3" {
           "s3:GetObject"
         ]
         Effect   = "Allow"
-        Resource = "${aws_s3_bucket.pdf_reports_bucket.arn}/*"
+        Resource = [
+          "${aws_s3_bucket.pdf_reports_bucket.arn}/*",
+          "arn:aws:s3:::finai-zappa-deployments-bucket/*"
+        ]
       }
     ]
   })
@@ -55,6 +58,10 @@ resource "aws_lambda_function" "flask_api" {
   handler       = "app.handler"
   runtime       = "python3.11"
   timeout       = 30
+
+  ephemeral_storage {
+    size = 1024
+  }
 
   vpc_config {
     subnet_ids         = [aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id]
