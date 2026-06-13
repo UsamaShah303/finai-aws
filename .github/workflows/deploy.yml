@@ -63,6 +63,8 @@ jobs:
               exit 1
             fi
           fi
+          echo "Increasing Lambda Ephemeral Storage to 1024MB..."
+          aws lambda update-function-configuration --function-name finai-api-v2-production --ephemeral-storage Size=1024
           
       - name: Install Node.js
         uses: actions/setup-node@v3
