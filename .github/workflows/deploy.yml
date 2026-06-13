@@ -44,7 +44,9 @@ jobs:
         run: |
           # Import Lambda
           terraform import aws_lambda_function.flask_api finai-flask-api || true
-          terraform import aws_lambda_permission.api_gw_invoke finai-flask-api/AllowExecutionFromAPIGateway || true
+
+          # Remove old Lambda permission so Terraform can recreate it
+          aws lambda remove-permission --function-name finai-flask-api --statement-id AllowExecutionFromAPIGateway || true
 
           # Clean up old API Gateway completely (delete from state + AWS, let terraform recreate)
           terraform state rm aws_apigatewayv2_route.default_route || true
