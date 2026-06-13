@@ -38,6 +38,14 @@ jobs:
         working-directory: ./infra
         run: terraform init
 
+      - name: Import existing resources into state
+        working-directory: ./infra
+        continue-on-error: true
+        run: |
+          terraform import aws_lambda_function.flask_api finai-flask-api || true
+          terraform import aws_apigatewayv2_api.http_api $(aws apigatewayv2 get-apis --query "Items[?Name=='finai-api-gateway'].ApiId" --output text) || true
+          terraform import aws_cognito_user_pool.finai_pool $(aws cognito-idp list-user-pools --max-results 10 --query "UserPools[?Name=='finai-user-pool'].Id" --output text) || true
+
       - name: Terraform Apply
         working-directory: ./infra
         run: terraform apply -auto-approve
