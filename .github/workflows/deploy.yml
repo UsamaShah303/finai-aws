@@ -98,14 +98,7 @@ jobs:
           fi
 
           # 2. Update zappa_settings.json with the dynamic layer ARN
-          python -c "
-import json
-with open('zappa_settings.json', 'r') as f:
-    data = json.load(f)
-data['production']['layers'] = ['$LAYER_ARN']
-with open('zappa_settings.json', 'w') as f:
-    json.dump(data, f, indent=4)
-"
+          python -c "import json; f=open('zappa_settings.json', 'r'); d=json.load(f); f.close(); d['production']['layers'] = ['$LAYER_ARN']; f=open('zappa_settings.json', 'w'); json.dump(d, f, indent=4); f.close()"
 
           # 3. Zappa deploy / update
           if ! zappa update production; then
