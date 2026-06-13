@@ -1,6 +1,6 @@
 # RDS PostgreSQL Instance
 resource "aws_db_subnet_group" "rds_subnet_group" {
-  name       = "finai-rds-subnet-group-v4"
+  name       = "finai-db-subnet-final"
   subnet_ids = [aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id]
 
   tags = {
@@ -9,14 +9,14 @@ resource "aws_db_subnet_group" "rds_subnet_group" {
 }
 
 resource "aws_db_instance" "finai_postgres" {
-  identifier             = "finai-db-v4"
+  identifier             = "finai-postgres-final"
   engine                 = "postgres"
   engine_version         = "15"
   instance_class         = "db.t3.micro"
   allocated_storage      = 20
   db_name                = "finaidb"
   username               = "postgres"
-  password               = "SuperSecretPassword123!" # In prod, use Secrets Manager
+  password               = "SuperSecretPassword123!"
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
   skip_final_snapshot    = true
@@ -25,7 +25,7 @@ resource "aws_db_instance" "finai_postgres" {
 
 # DynamoDB Table (Session State)
 resource "aws_dynamodb_table" "sessions_table" {
-  name           = "FinAISessionsV4"
+  name           = "FinAISessionsFinal"
   billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "SessionId"
 

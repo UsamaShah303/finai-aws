@@ -9,7 +9,7 @@ resource "aws_vpc" "main_vpc" {
   }
 }
 
-# Public Subnet (For NAT / Load Balancers if needed)
+# Public Subnet
 resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.main_vpc.id
   cidr_block              = "10.0.1.0/24"
@@ -21,7 +21,7 @@ resource "aws_subnet" "public_subnet" {
   }
 }
 
-# Private Subnet (For RDS and Lambda)
+# Private Subnets
 resource "aws_subnet" "private_subnet_1" {
   vpc_id            = aws_vpc.main_vpc.id
   cidr_block        = "10.0.2.0/24"

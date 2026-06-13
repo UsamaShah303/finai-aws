@@ -22,6 +22,13 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2
 
+      - name: Create Terraform State Bucket (if not exists)
+        run: |
+          aws s3api create-bucket \
+            --bucket finai-tf-state-usama303 \
+            --region us-east-2 \
+            --create-bucket-configuration LocationConstraint=us-east-2 || true
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:

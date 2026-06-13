@@ -1,6 +1,6 @@
 # IAM Role for Lambda
 resource "aws_iam_role" "lambda_exec_role" {
-  name = "finai_lambda_exec_role_v4"
+  name = "finai-lambda-role-final"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -20,7 +20,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_exec" {
 }
 
 resource "aws_iam_role_policy" "lambda_dynamodb_s3" {
-  name = "lambda_dynamodb_s3_access_v4"
+  name = "finai-lambda-policy-final"
   role = aws_iam_role.lambda_exec_role.id
 
   policy = jsonencode({
@@ -49,7 +49,7 @@ resource "aws_iam_role_policy" "lambda_dynamodb_s3" {
 
 # Lambda Function (Flask App wrapped via Zappa/Mangum)
 resource "aws_lambda_function" "flask_api" {
-  filename      = "dummy_payload.zip" # Replace with actual build zip
+  filename      = "dummy_payload.zip"
   function_name = "finai-flask-api"
   role          = aws_iam_role.lambda_exec_role.arn
   handler       = "app.handler"
@@ -63,8 +63,8 @@ resource "aws_lambda_function" "flask_api" {
 
   environment {
     variables = {
-      DB_HOST = aws_db_instance.finai_postgres.address
-      DB_NAME = aws_db_instance.finai_postgres.db_name
+      DB_HOST   = aws_db_instance.finai_postgres.address
+      DB_NAME   = aws_db_instance.finai_postgres.db_name
       S3_BUCKET = aws_s3_bucket.pdf_reports_bucket.bucket
     }
   }
