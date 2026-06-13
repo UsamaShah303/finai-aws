@@ -80,15 +80,4 @@ resource "aws_security_group" "lambda_sg" {
   }
 }
 
-resource "aws_security_group" "rds_sg" {
-  name        = "finai-rds-sg"
-  description = "Security group for PostgreSQL RDS"
-  vpc_id      = aws_vpc.main_vpc.id
 
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.lambda_sg.id]
-  }
-}

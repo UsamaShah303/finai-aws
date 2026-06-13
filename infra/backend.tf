@@ -63,8 +63,6 @@ resource "aws_lambda_function" "flask_api" {
 
   environment {
     variables = {
-      DB_HOST   = aws_db_instance.finai_postgres.address
-      DB_NAME   = aws_db_instance.finai_postgres.db_name
       S3_BUCKET = aws_s3_bucket.pdf_reports_bucket.bucket
     }
   }
