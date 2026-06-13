@@ -38,13 +38,44 @@ jobs:
         working-directory: ./infra
         run: terraform init
 
-      - name: Import existing resources into state
+      - name: Import all orphaned resources into state
         working-directory: ./infra
         continue-on-error: true
         run: |
+          # Lambda
           terraform import aws_lambda_function.flask_api finai-flask-api || true
-          terraform import aws_apigatewayv2_api.http_api $(aws apigatewayv2 get-apis --query "Items[?Name=='finai-api-gateway'].ApiId" --output text) || true
-          terraform import aws_cognito_user_pool.finai_pool $(aws cognito-idp list-user-pools --max-results 10 --query "UserPools[?Name=='finai-user-pool'].Id" --output text) || true
+          terraform import aws_lambda_permission.api_gw_invoke finai-flask-api/AllowExecutionFromAPIGateway || true
+
+          # API Gateway
+          API_ID=$(aws apigatewayv2 get-apis --query "Items[?Name=='finai-api-gateway'].ApiId" --output text 2>/dev/null)
+          if [ -n "$API_ID" ] && [ "$API_ID" != "None" ]; then
+            terraform import aws_apigatewayv2_api.http_api $API_ID || true
+
+            ROUTE_ID=$(aws apigatewayv2 get-routes --api-id $API_ID --query "Items[?RouteKey=='ANY /{proxy+}'].RouteId" --output text 2>/dev/null)
+            if [ -n "$ROUTE_ID" ] && [ "$ROUTE_ID" != "None" ]; then
+              terraform import aws_apigatewayv2_route.default_route $API_ID/$ROUTE_ID || true
+            fi
+
+            INT_ID=$(aws apigatewayv2 get-integrations --api-id $API_ID --query "Items[0].IntegrationId" --output text 2>/dev/null)
+            if [ -n "$INT_ID" ] && [ "$INT_ID" != "None" ]; then
+              terraform import aws_apigatewayv2_integration.lambda_integration $API_ID/$INT_ID || true
+            fi
+
+            terraform import 'aws_apigatewayv2_stage.default_stage' "$API_ID/\$default" || true
+          fi
+
+          # Cognito
+          POOL_ID=$(aws cognito-idp list-user-pools --max-results 10 --query "UserPools[?Name=='finai-user-pool'].Id" --output text 2>/dev/null)
+          if [ -n "$POOL_ID" ] && [ "$POOL_ID" != "None" ]; then
+            terraform import aws_cognito_user_pool.finai_pool $POOL_ID || true
+            CLIENT_ID=$(aws cognito-idp list-user-pool-clients --user-pool-id $POOL_ID --query "UserPoolClients[0].ClientId" --output text 2>/dev/null)
+            if [ -n "$CLIENT_ID" ] && [ "$CLIENT_ID" != "None" ]; then
+              terraform import aws_cognito_user_pool_client.finai_client $POOL_ID/$CLIENT_ID || true
+            fi
+          fi
+
+          # IAM
+          terraform import aws_iam_role_policy.lambda_dynamodb_s3 finai-lambda-role-final:finai-lambda-policy-final || true
 
       - name: Terraform Apply
         working-directory: ./infra
