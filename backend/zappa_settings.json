@@ -1,7 +1,7 @@
 {
     "production": {
         "app_function": "app.app",
-        "aws_region": "us-east-1",
+        "aws_region": "us-east-2",
         "project_name": "finai-aws-api",
         "runtime": "python3.11",
         "s3_bucket": "finai-zappa-deployments-bucket",
