@@ -9,7 +9,8 @@
         "role_name": "finai-lambda-role-final",
         "slim_handler": true,
         "keep_warm": false,
-        "memory_size": 1024,
+        "memory_size": 2048,
+        "timeout_seconds": 300,
         "ephemeral_storage": {
             "Size": 1024
         },
