@@ -3,7 +3,7 @@
         "app_function": "app.app",
         "aws_region": "us-east-2",
         "project_name": "finai-api-v2",
-        "runtime": "python3.11",
+        "runtime": "python3.12",
         "s3_bucket": "finai-zappa-deployments-bucket",
         "manage_roles": false,
         "role_name": "finai-lambda-role-final",
