@@ -53,6 +53,64 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
           pip install zappa
+
+          # 1. Fetch or publish the Lambda layer
+          LAYER_ARN=$(aws lambda list-layer-versions --layer-name finai-ml-layer --query "LayerVersions[0].LayerVersionArn" --output text 2>/dev/null || echo "")
+          if [ "$LAYER_ARN" = "None" ] || [ -z "$LAYER_ARN" ]; then
+            echo "Layer finai-ml-layer not found. Building layer..."
+            
+            # Create requirements-layer.txt
+            cat << 'EOF' > requirements-layer.txt
+numpy==2.2.6
+pandas==2.2.3
+pandas-datareader==0.10.0
+scikit-learn==1.6.1
+PyPortfolioOpt==1.5.6
+cvxpy>=1.8.0
+yfinance==0.2.54
+EOF
+            
+            mkdir -p layer/python
+            pip install -r requirements-layer.txt -t layer/python
+            
+            # Size reduction optimizations
+            find layer/python -type d -name "tests" -exec rm -rf {} + || true
+            find layer/python -type d -name "testing" -exec rm -rf {} + || true
+            find layer/python -type d -name "__pycache__" -exec rm -rf {} + || true
+            find layer/python -name "*.pyc" -delete || true
+            find layer/python -name "*.so" -exec strip {} + || true
+            
+            cd layer
+            zip -r ../ml-layer.zip python
+            cd ..
+            
+            echo "Uploading layer to S3..."
+            aws s3 cp ml-layer.zip s3://finai-zappa-deployments-bucket/ml-layer.zip
+            
+            echo "Publishing Lambda layer..."
+            LAYER_ARN=$(aws lambda publish-layer-version \
+              --layer-name finai-ml-layer \
+              --description "FinAI ML dependencies layer" \
+              --content S3Bucket=finai-zappa-deployments-bucket,S3Key=ml-layer.zip \
+              --compatible-runtimes python3.12 \
+              --query "LayerVersionArn" \
+              --output text)
+            echo "Layer published: $LAYER_ARN"
+          else
+            echo "Using existing layer: $LAYER_ARN"
+          fi
+
+          # 2. Update zappa_settings.json with the dynamic layer ARN
+          python -c "
+import json
+with open('zappa_settings.json', 'r') as f:
+    data = json.load(f)
+data['production']['layers'] = ['$LAYER_ARN']
+with open('zappa_settings.json', 'w') as f:
+    json.dump(data, f, indent=4)
+"
+
+          # 3. Zappa deploy / update
           if ! zappa update production; then
             echo "First update attempt failed. Adding API Gateway invocation permission..."
             aws lambda add-permission \
