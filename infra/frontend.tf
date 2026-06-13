@@ -17,7 +17,7 @@ resource "aws_s3_bucket_website_configuration" "frontend_website" {
 
 # Origin Access Control (OAC) for CloudFront
 resource "aws_cloudfront_origin_access_control" "oac" {
-  name                              = "finai-frontend-oac"
+  name                              = "finai-frontend-oac-v2"
   description                       = "OAC for FinAI Frontend"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"

@@ -6,7 +6,7 @@
         "runtime": "python3.11",
         "s3_bucket": "finai-zappa-deployments-bucket",
         "manage_roles": false,
-        "role_name": "finai_lambda_exec_role",
+        "role_name": "finai_lambda_exec_role_v2",
         "cors": true,
         "environment_variables": {
             "SUPABASE_URL": "replace_me",

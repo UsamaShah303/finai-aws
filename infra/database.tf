@@ -1,6 +1,6 @@
 # RDS PostgreSQL Instance
 resource "aws_db_subnet_group" "rds_subnet_group" {
-  name       = "finai-rds-subnet-group"
+  name       = "finai-rds-subnet-group-v2"
   subnet_ids = [aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id]
 
   tags = {
@@ -25,7 +25,7 @@ resource "aws_db_instance" "finai_postgres" {
 
 # DynamoDB Table (Session State)
 resource "aws_dynamodb_table" "sessions_table" {
-  name           = "FinAISessions"
+  name           = "FinAISessionsV2"
   billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "SessionId"
 

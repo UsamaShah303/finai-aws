@@ -1,6 +1,6 @@
 # IAM Role for Lambda
 resource "aws_iam_role" "lambda_exec_role" {
-  name = "finai_lambda_exec_role"
+  name = "finai_lambda_exec_role_v2"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -20,7 +20,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_exec" {
 }
 
 resource "aws_iam_role_policy" "lambda_dynamodb_s3" {
-  name = "lambda_dynamodb_s3_access"
+  name = "lambda_dynamodb_s3_access_v2"
   role = aws_iam_role.lambda_exec_role.id
 
   policy = jsonencode({
