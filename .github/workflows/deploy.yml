@@ -54,13 +54,23 @@ jobs:
           pip install -r requirements.txt
           pip install zappa
           if ! zappa update production; then
-            if ! zappa deploy production; then
-              echo "Deployment failed! Invoking Lambda directly to get traceback..."
-              aws lambda invoke --function-name finai-api-v2-production --payload '{"path": "/", "httpMethod": "GET"}' --cli-binary-format raw-in-base64-out response.json || true
-              cat response.json || true
-              echo "Fetching logs..."
-              aws logs tail /aws/lambda/finai-api-v2-production || true
-              exit 1
+            echo "First update attempt failed. Adding API Gateway invocation permission..."
+            aws lambda add-permission \
+              --function-name finai-api-v2-production \
+              --statement-id AllowAPIGatewayInvoke \
+              --action lambda:InvokeFunction \
+              --principal apigateway.amazonaws.com \
+              --source-arn "arn:aws:execute-api:us-east-2:*:*/*/*/*" || true
+            
+            if ! zappa update production; then
+              if ! zappa deploy production; then
+                echo "Deployment failed! Invoking Lambda directly to get traceback..."
+                aws lambda invoke --function-name finai-api-v2-production --payload '{"path": "/", "httpMethod": "GET"}' --cli-binary-format raw-in-base64-out response.json || true
+                cat response.json || true
+                echo "Fetching logs..."
+                aws logs tail /aws/lambda/finai-api-v2-production || true
+                exit 1
+              fi
             fi
           fi
           

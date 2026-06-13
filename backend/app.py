@@ -63,6 +63,17 @@ app.register_blueprint(paycheck_bp, url_prefix="/api")
 app.register_blueprint(admin_bp, url_prefix="/api")
 
 
+# ── Root route ────────────────────────────────────────────────────────────────
+@app.route("/", methods=["GET"])
+def index():
+    """Welcome message and root route."""
+    return {
+        "status": "ok",
+        "service": "finai-backend",
+        "message": "Welcome to FinAI Nexus API"
+    }
+
+
 # ── Health check (no auth required) ──────────────────────────────────────────
 @app.route("/api/health", methods=["GET"])
 def health_check():
