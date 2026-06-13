@@ -59,16 +59,13 @@ jobs:
           if [ "$LAYER_ARN" = "None" ] || [ -z "$LAYER_ARN" ]; then
             echo "Layer finai-ml-layer not found. Building layer..."
             
-            # Create requirements-layer.txt
-            cat << 'EOF' > requirements-layer.txt
-numpy==2.2.6
-pandas==2.2.3
-pandas-datareader==0.10.0
-scikit-learn==1.6.1
-PyPortfolioOpt==1.5.6
-cvxpy>=1.8.0
-yfinance==0.2.54
-EOF
+            echo "numpy==2.2.6" > requirements-layer.txt
+            echo "pandas==2.2.3" >> requirements-layer.txt
+            echo "pandas-datareader==0.10.0" >> requirements-layer.txt
+            echo "scikit-learn==1.6.1" >> requirements-layer.txt
+            echo "PyPortfolioOpt==1.5.6" >> requirements-layer.txt
+            echo "cvxpy>=1.8.0" >> requirements-layer.txt
+            echo "yfinance==0.2.54" >> requirements-layer.txt
             
             mkdir -p layer/python
             pip install -r requirements-layer.txt -t layer/python
