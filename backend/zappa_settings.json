@@ -1,0 +1,17 @@
+{
+    "production": {
+        "app_function": "app.app",
+        "aws_region": "us-east-1",
+        "project_name": "finai-aws-api",
+        "runtime": "python3.11",
+        "s3_bucket": "finai-zappa-deployments-bucket",
+        "manage_roles": false,
+        "role_name": "finai_lambda_exec_role",
+        "cors": true,
+        "environment_variables": {
+            "SUPABASE_URL": "replace_me",
+            "SUPABASE_KEY": "replace_me",
+            "JWT_SECRET_KEY": "replace_me"
+        }
+    }
+}
