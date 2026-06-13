@@ -59,16 +59,23 @@ jobs:
           if [ "$LAYER_ARN" = "None" ] || [ -z "$LAYER_ARN" ]; then
             echo "Layer finai-ml-layer not found. Building layer..."
             
-            echo "numpy==2.2.6" > requirements-layer.txt
-            echo "pandas==2.2.3" >> requirements-layer.txt
-            echo "pandas-datareader==0.10.0" >> requirements-layer.txt
-            echo "scikit-learn==1.6.1" >> requirements-layer.txt
+            # Create requirements-layer.txt
+            echo "pandas-datareader==0.10.0" > requirements-layer.txt
             echo "PyPortfolioOpt==1.5.6" >> requirements-layer.txt
             echo "cvxpy>=1.8.0" >> requirements-layer.txt
             echo "yfinance==0.2.54" >> requirements-layer.txt
             
             mkdir -p layer/python
             pip install -r requirements-layer.txt -t layer/python
+            
+            # Remove numpy and pandas to stay under the 250MB layer unzipped limit
+            # (they are provided by the AWS SDK Pandas layer instead)
+            rm -rf layer/python/numpy
+            rm -rf layer/python/numpy-*.dist-info
+            rm -rf layer/python/pandas
+            rm -rf layer/python/pandas-*.dist-info
+            rm -rf layer/python/pyarrow
+            rm -rf layer/python/pyarrow-*.dist-info
             
             # Size reduction optimizations
             find layer/python -type d -name "tests" -exec rm -rf {} + || true
@@ -97,8 +104,8 @@ jobs:
             echo "Using existing layer: $LAYER_ARN"
           fi
 
-          # 2. Update zappa_settings.json with the dynamic layer ARN
-          python -c "import json; f=open('zappa_settings.json', 'r'); d=json.load(f); f.close(); d['production']['layers'] = ['$LAYER_ARN']; f=open('zappa_settings.json', 'w'); json.dump(d, f, indent=4); f.close()"
+          # 2. Update zappa_settings.json with the dynamic layer ARN and AWS SDK Pandas layer
+          python -c "import json; f=open('zappa_settings.json', 'r'); d=json.load(f); f.close(); d['production']['layers'] = ['arn:aws:lambda:us-east-2:336392948345:layer:AWSSDKPandas-Python312:27', '$LAYER_ARN']; f=open('zappa_settings.json', 'w'); json.dump(d, f, indent=4); f.close()""
 
           # 3. Zappa deploy / update
           if ! zappa update production; then
