@@ -59,8 +59,7 @@ jobs:
               --function-name finai-api-v2-production \
               --statement-id AllowAPIGatewayInvoke \
               --action lambda:InvokeFunction \
-              --principal apigateway.amazonaws.com \
-              --source-arn "arn:aws:execute-api:us-east-2:*:*/*/*/*" || true
+              --principal apigateway.amazonaws.com || true
             
             if ! zappa update production; then
               if ! zappa deploy production; then
