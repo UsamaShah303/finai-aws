@@ -56,7 +56,7 @@ jobs:
           if ! zappa update production; then
             if ! zappa deploy production; then
               echo "Deployment failed! Fetching Zappa Lambda logs..."
-              zappa tail production --num 100 || true
+              aws logs tail /aws/lambda/finai-api-v2-production --limit 100 || true
               exit 1
             fi
           fi
