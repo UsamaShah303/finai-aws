@@ -11,7 +11,7 @@ resource "aws_db_subnet_group" "rds_subnet_group" {
 resource "aws_db_instance" "finai_postgres" {
   identifier             = "finai-db"
   engine                 = "postgres"
-  engine_version         = "15.4"
+  engine_version         = "15"
   instance_class         = "db.t3.micro"
   allocated_storage      = 20
   db_name                = "finaidb"
