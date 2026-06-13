@@ -40,6 +40,21 @@ jobs:
           terraform init
           terraform apply -auto-approve
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Build & Deploy Flask Backend (Lambda via Zappa)
+        working-directory: ./backend
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install zappa
+          zappa update production || zappa deploy production
+          
       - name: Install Node.js
         uses: actions/setup-node@v3
         with:
@@ -49,9 +64,15 @@ jobs:
         working-directory: ./frontend
         run: |
           npm install
-          npm run build
           
-          # Fetch dynamic names from Terraform state
+          # Fetch API URL directly from Zappa's created API Gateway
+          API_ID=$(aws apigateway get-rest-apis --query "items[?name=='finai-aws-api-production'].id" --output text)
+          export PROD_API_URL="https://${API_ID}.execute-api.us-east-2.amazonaws.com/production"
+          echo "Using API URL: $PROD_API_URL"
+          
+          VITE_API_URL=$PROD_API_URL npm run build
+          
+          # Fetch dynamic S3 names from Terraform
           cd ../infra
           FRONTEND_BUCKET=$(terraform output -raw frontend_bucket_name)
           CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
@@ -59,20 +80,3 @@ jobs:
 
           aws s3 sync dist/ s3://$FRONTEND_BUCKET --delete
           aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths "/*"
-        env:
-          VITE_API_URL: ${{ secrets.PROD_API_URL }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Build & Deploy Flask Backend (Lambda)
-        working-directory: ./backend
-        run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install zappa
-          zappa update production || zappa deploy production
