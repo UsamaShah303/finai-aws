@@ -66,7 +66,7 @@ jobs:
           npm install
           
           # Fetch API URL directly from Zappa's created API Gateway
-          API_ID=$(aws apigateway get-rest-apis --query "items[?name=='finai-aws-api-production'].id" --output text)
+          API_ID=$(aws apigateway get-rest-apis --query "items[?name=='finai-api-v2-production'].id" --output text)
           export PROD_API_URL="https://${API_ID}.execute-api.us-east-2.amazonaws.com/production"
           echo "Using API URL: $PROD_API_URL"
           
