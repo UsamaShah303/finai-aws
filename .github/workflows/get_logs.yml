@@ -1,0 +1,42 @@
+name: Fetch Lambda Logs
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  get-logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+
+      - name: Fetch Logs
+        run: |
+          # Get the latest log stream
+          STREAM=$(aws logs describe-log-streams \
+            --log-group-name "/aws/lambda/finai-api-v2-production-docker" \
+            --order-by "LastEventTime" \
+            --descending \
+            --limit 1 \
+            --query "logStreams[0].logStreamName" \
+            --output text)
+          
+          echo "Fetching logs from stream: $STREAM"
+          
+          if [ "$STREAM" != "None" ] && [ -n "$STREAM" ]; then
+            aws logs get-log-events \
+              --log-group-name "/aws/lambda/finai-api-v2-production-docker" \
+              --log-stream-name "$STREAM" \
+              --limit 100 \
+              --query "events[*].message" \
+              --output text
+          else
+            echo "No log streams found."
+          fi
