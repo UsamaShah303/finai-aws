@@ -19,10 +19,10 @@
             "arn:aws:lambda:us-east-2:336392948345:layer:AWSSDKPandas-Python312:27"
         ],
         "exclude": [
-            "numpy/", "numpy-*.dist-info/",
-            "pandas/", "pandas-*.dist-info/",
-            "pyarrow/", "pyarrow-*.dist-info/",
-            "scipy/", "scipy-*.dist-info/",
+            "numpy/", "numpy-*.dist-info/", "numpy.libs/", "numpy.libs/*",
+            "pandas/", "pandas-*.dist-info/", "pandas.libs/", "pandas.libs/*",
+            "pyarrow/", "pyarrow-*.dist-info/", "pyarrow.libs/", "pyarrow.libs/*",
+            "scipy/", "scipy-*.dist-info/", "scipy.libs/", "scipy.libs/*",
             "scikit_learn/", "scikit_learn-*.dist-info/",
             "sklearn/", "sklearn-*.dist-info/",
             "cvxpy/", "cvxpy-*.dist-info/",

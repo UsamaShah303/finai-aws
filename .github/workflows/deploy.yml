@@ -55,9 +55,9 @@ jobs:
           pip install zappa
 
           # 1. Fetch or publish the Lambda layer
-          LAYER_ARN=$(aws lambda list-layer-versions --layer-name finai-ml-layer --query "LayerVersions[0].LayerVersionArn" --output text 2>/dev/null || echo "")
+          LAYER_ARN=$(aws lambda list-layer-versions --layer-name finai-ml-layer-v3 --query "LayerVersions[0].LayerVersionArn" --output text 2>/dev/null || echo "")
           if [ "$LAYER_ARN" = "None" ] || [ -z "$LAYER_ARN" ]; then
-            echo "Layer finai-ml-layer not found. Building layer..."
+            echo "Layer finai-ml-layer-v3 not found. Building layer..."
             
             # Create requirements-layer.txt
             echo "pandas-datareader==0.10.0" > requirements-layer.txt
@@ -97,8 +97,8 @@ jobs:
             
             echo "Publishing Lambda layer..."
             LAYER_ARN=$(aws lambda publish-layer-version \
-              --layer-name finai-ml-layer \
-              --description "FinAI ML dependencies layer" \
+              --layer-name finai-ml-layer-v3 \
+              --description "FinAI ML dependencies layer v3" \
               --content S3Bucket=finai-zappa-deployments-bucket,S3Key=ml-layer.zip \
               --compatible-runtimes python3.12 \
               --query "LayerVersionArn" \
