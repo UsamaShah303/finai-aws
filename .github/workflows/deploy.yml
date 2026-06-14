@@ -77,6 +77,15 @@ jobs:
             rm -rf layer/python/pyarrow
             rm -rf layer/python/pyarrow-*.dist-info
             
+            # Prune unused SciPy submodules to further save space
+            rm -rf layer/python/scipy/ndimage
+            rm -rf layer/python/scipy/spatial
+            rm -rf layer/python/scipy/fft
+            rm -rf layer/python/scipy/fftpack
+            rm -rf layer/python/scipy/io
+            rm -rf layer/python/scipy/signal
+            rm -rf layer/python/scipy/misc
+            
             # Size reduction optimizations
             find layer/python -type d -name "tests" -exec rm -rf {} + || true
             find layer/python -type d -name "testing" -exec rm -rf {} + || true
