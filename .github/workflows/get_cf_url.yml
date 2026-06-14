@@ -1,0 +1,24 @@
+name: Get CloudFront URL
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  get-url:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+
+      - name: Get Distribution URL
+        run: |
+          aws cloudfront list-distributions \
+            --query "DistributionList.Items[0].DomainName" \
+            --output text
