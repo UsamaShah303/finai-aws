@@ -27,7 +27,13 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # CORS — allow frontend origins
-CORS(app, origins=os.getenv("CORS_ORIGINS", "http://localhost:5173").split(","))
+# CORS — allow frontend origins (use * in production, specific origins in dev)
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173")
+if cors_origins == "*":
+    CORS(app)  # Allow all origins (production)
+else:
+    CORS(app, origins=cors_origins.split(","))
+
 
 # JWT configuration
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "change-me-in-production")

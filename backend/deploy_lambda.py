@@ -22,7 +22,8 @@ role_arn = f"arn:aws:iam::{account_id}:role/finai-lambda-role-final"
 env_vars = {
     "SUPABASE_URL": "https://iaozluyveedsascwjgsv.supabase.co",
     "SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlhb3psdXl2ZWVkc2FzY3dqZ3N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMjI2OTcsImV4cCI6MjA5NDY5ODY5N30.1MErkTaUBL4NMYWM2bx8sWky5KID6tADhXWeqwRV0Hs",
-    "JWT_SECRET_KEY": "finai-nexus-jwt-secret-key-2026-production"
+    "JWT_SECRET_KEY": "finai-nexus-jwt-secret-key-2026-production",
+    "CORS_ORIGINS": "*"   # Allow all origins in production (CloudFront + any frontend)
 }
 
 # 1. Create or Update Lambda Function
