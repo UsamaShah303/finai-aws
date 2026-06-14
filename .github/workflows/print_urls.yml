@@ -1,7 +1,9 @@
 name: Print Deployment URLs
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   print-urls:
@@ -46,3 +48,12 @@ jobs:
           echo "Testing API health..."
           curl -s "https://${API_ID}.execute-api.us-east-2.amazonaws.com/production/api/health" || echo "Health check failed"
           echo "=========================================="
+          
+          # Fetch logs
+          echo "Fetching latest Lambda logs..."
+          STREAM=$(aws logs describe-log-streams --log-group-name "/aws/lambda/finai-api-v2-production-docker" --order-by "LastEventTime" --descending --limit 1 --query "logStreams[0].logStreamName" --output text 2>/dev/null || echo "not-found")
+          if [ "$STREAM" != "not-found" ] && [ "$STREAM" != "None" ]; then
+            aws logs get-log-events --log-group-name "/aws/lambda/finai-api-v2-production-docker" --log-stream-name "$STREAM" --limit 100 --query "events[*].message" --output text
+          else
+            echo "No log stream found yet."
+          fi
