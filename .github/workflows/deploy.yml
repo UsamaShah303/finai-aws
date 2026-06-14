@@ -68,23 +68,16 @@ jobs:
             mkdir -p layer/python
             pip install -r requirements-layer.txt -t layer/python
             
-            # Remove numpy and pandas to stay under the 250MB layer unzipped limit
-            # (they are provided by the AWS SDK Pandas layer instead)
+            # Remove numpy, pandas, pyarrow, and scipy to stay under the 250MB unzipped limit
+            # (they are provided by Klayers scipy and pandas layers instead)
             rm -rf layer/python/numpy
             rm -rf layer/python/numpy-*.dist-info
             rm -rf layer/python/pandas
             rm -rf layer/python/pandas-*.dist-info
             rm -rf layer/python/pyarrow
             rm -rf layer/python/pyarrow-*.dist-info
-            
-            # Prune unused SciPy submodules to further save space
-            rm -rf layer/python/scipy/ndimage
-            rm -rf layer/python/scipy/spatial
-            rm -rf layer/python/scipy/fft
-            rm -rf layer/python/scipy/fftpack
-            rm -rf layer/python/scipy/io
-            rm -rf layer/python/scipy/signal
-            rm -rf layer/python/scipy/misc
+            rm -rf layer/python/scipy
+            rm -rf layer/python/scipy-*.dist-info
             
             # Size reduction optimizations
             find layer/python -type d -name "tests" -exec rm -rf {} + || true
@@ -113,8 +106,8 @@ jobs:
             echo "Using existing layer: $LAYER_ARN"
           fi
 
-          # 2. Update zappa_settings.json with the dynamic layer ARN and AWS SDK Pandas layer
-          python -c "import json; f=open('zappa_settings.json', 'r'); d=json.load(f); f.close(); d['production']['layers'] = ['arn:aws:lambda:us-east-2:336392948345:layer:AWSSDKPandas-Python312:27', '$LAYER_ARN']; f=open('zappa_settings.json', 'w'); json.dump(d, f, indent=4); f.close()""
+          # 2. Update zappa_settings.json with the dynamic layer ARN and Klayers scipy/pandas layers
+          python -c "import json; f=open('zappa_settings.json', 'r'); d=json.load(f); f.close(); d['production']['layers'] = ['arn:aws:lambda:us-east-2:770693421928:layer:Klayers-p312-scipy:3', 'arn:aws:lambda:us-east-2:770693421928:layer:Klayers-p312-pandas:17', '$LAYER_ARN']; f=open('zappa_settings.json', 'w'); json.dump(d, f, indent=4); f.close()""
 
           # 3. Zappa deploy / update
           if ! zappa update production; then
