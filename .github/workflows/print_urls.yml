@@ -1,0 +1,48 @@
+name: Print Deployment URLs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  print-urls:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+          terraform_wrapper: false
+
+      - name: Get Deployment URLs
+        working-directory: ./infra
+        run: |
+          terraform init
+          
+          echo "=========================================="
+          CF_DOMAIN=$(terraform output -raw cloudfront_distribution_id 2>/dev/null || echo "not-found")
+          echo "CloudFront Distribution ID: $CF_DOMAIN"
+          
+          # Get the actual CloudFront domain from AWS
+          CF_URL=$(aws cloudfront list-distributions --query "DistributionList.Items[0].DomainName" --output text 2>/dev/null || echo "not-found")
+          echo "::notice title=CloudFront URL::https://$CF_URL"
+          echo "LIVE APP URL: https://$CF_URL"
+          
+          # Get API Gateway URL
+          API_ID=$(aws apigateway get-rest-apis --query "items[?name=='finai-api-v2-production'].id" --output text 2>/dev/null || echo "not-found")
+          echo "::notice title=API Gateway URL::https://${API_ID}.execute-api.us-east-2.amazonaws.com/production"
+          echo "API URL: https://${API_ID}.execute-api.us-east-2.amazonaws.com/production"
+          
+          # Test health endpoint
+          echo "Testing API health..."
+          curl -s "https://${API_ID}.execute-api.us-east-2.amazonaws.com/production/api/health" || echo "Health check failed"
+          echo "=========================================="
