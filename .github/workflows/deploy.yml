@@ -70,14 +70,16 @@ jobs:
             
             # Remove numpy, pandas, pyarrow, and scipy to stay under the 250MB unzipped limit
             # (they are provided by Klayers scipy and pandas layers instead)
-            rm -rf layer/python/numpy
-            rm -rf layer/python/numpy-*.dist-info
+            rm -rf layer/python/numpy*
+            rm -rf layer/python/scipy*
+            rm -rf layer/python/pyarrow*
             rm -rf layer/python/pandas
             rm -rf layer/python/pandas-*.dist-info
-            rm -rf layer/python/pyarrow
-            rm -rf layer/python/pyarrow-*.dist-info
-            rm -rf layer/python/scipy
-            rm -rf layer/python/scipy-*.dist-info
+            rm -rf layer/python/pandas.libs
+            
+            # Print sizes for debugging
+            echo "Layer directory contents and sizes:"
+            du -sh layer/python/* || true
             
             # Size reduction optimizations
             find layer/python -type d -name "tests" -exec rm -rf {} + || true
