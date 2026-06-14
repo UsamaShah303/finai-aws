@@ -16,79 +16,51 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2
 
-      - name: Debug Lambda State
+      - name: Debug API Gateway + Lambda
         run: |
           SUPA_URL="https://iaozluyveedsascwjgsv.supabase.co"
           SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlhb3psdXl2ZWVkc2FzY3dqZ3N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMjI2OTcsImV4cCI6MjA5NDY5ODY5N30.1MErkTaUBL4NMYWM2bx8sWky5KID6tADhXWeqwRV0Hs"
           
-          # Step 1: Check Lambda last modified
-          echo "=== STEP 1: Lambda Config ===" > debug.txt
-          aws lambda get-function-configuration \
-            --function-name finai-api-v2-production-docker \
-            --query "{LastModified: LastModified, CodeSize: CodeSize, State: State, LastUpdateStatus: LastUpdateStatus, ImageUri: Code.ImageUri}" \
-            --output json >> debug.txt 2>&1
+          # Step 1: Check API Gateway integration URIs
+          echo "=== STEP 1: API Gateway Integrations ===" > debug.txt
+          API_ID=$(aws apigateway get-rest-apis --query "items[?name=='finai-api-v2-production'].id" --output text)
+          echo "API ID: $API_ID" >> debug.txt
           
-          # Step 2: Force update Lambda to latest image
-          echo "=== STEP 2: Force Update Lambda Code ===" >> debug.txt
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          aws lambda update-function-code \
-            --function-name finai-api-v2-production-docker \
-            --image-uri ${ACCOUNT_ID}.dkr.ecr.us-east-2.amazonaws.com/finai-api-image:latest \
-            --region us-east-2 >> debug.txt 2>&1
+          # List ALL resources and their integration URIs
+          aws apigateway get-resources --rest-api-id $API_ID --query "items[*].{path: path, methods: resourceMethods}" --output json >> debug.txt 2>&1
           
-          # Wait for update
-          echo "Waiting for Lambda update..." >> debug.txt
-          sleep 15
+          # Check the ANY method integration on the proxy resource  
+          echo "=== Proxy resource integration ===" >> debug.txt
+          PROXY_ID=$(aws apigateway get-resources --rest-api-id $API_ID --query "items[?path=='/{proxy+}'].id" --output text)
+          echo "Proxy resource ID: $PROXY_ID" >> debug.txt
           
-          # Step 3: Check state after update
-          echo "=== STEP 3: Lambda State After Update ===" >> debug.txt
-          aws lambda get-function-configuration \
-            --function-name finai-api-v2-production-docker \
-            --query "{LastModified: LastModified, State: State, LastUpdateStatus: LastUpdateStatus}" \
-            --output json >> debug.txt 2>&1
+          if [ -n "$PROXY_ID" ] && [ "$PROXY_ID" != "None" ]; then
+            aws apigateway get-integration --rest-api-id $API_ID --resource-id $PROXY_ID --http-method ANY --output json >> debug.txt 2>&1 || echo "No ANY method" >> debug.txt
+          fi
           
-          # Step 4: Invoke Lambda directly (cold start)
-          echo "=== STEP 4: Direct Lambda Invocation ===" >> debug.txt
+          # Step 2: Warm up Lambda (invoke it once so cold start is done)
+          echo "=== STEP 2: Warming up Lambda ===" >> debug.txt
           aws lambda invoke \
             --function-name finai-api-v2-production-docker \
-            --payload '{"resource": "/api/health", "path": "/api/health", "httpMethod": "GET", "headers": {"Host": "test.execute-api.us-east-2.amazonaws.com"}, "requestContext": {"resourcePath": "/api/health", "httpMethod": "GET", "path": "/production/api/health", "stage": "production"}, "body": null, "isBase64Encoded": false}' \
+            --payload '{"resource": "/api/health", "path": "/api/health", "httpMethod": "GET", "headers": {"Host": "test"}, "requestContext": {"resourcePath": "/api/health", "httpMethod": "GET", "path": "/production/api/health", "stage": "production"}, "body": null, "isBase64Encoded": false}' \
             --cli-binary-format raw-in-base64-out \
             --log-type Tail \
-            --query '{StatusCode: StatusCode, FunctionError: FunctionError, LogResult: LogResult}' \
-            --output json \
-            response.json >> invoke_meta.json 2>&1
+            warmup_response.json >> debug.txt 2>&1
+          echo "Warmup response:" >> debug.txt
+          cat warmup_response.json >> debug.txt
           
-          echo "Invoke metadata:" >> debug.txt
-          cat invoke_meta.json >> debug.txt
+          # Step 3: Wait and then test via API Gateway
+          echo "=== STEP 3: Test via API Gateway (after warmup) ===" >> debug.txt
+          sleep 2
+          curl -s -w "\nHTTP_CODE:%{http_code}\nTIME_TOTAL:%{time_total}s\n" \
+            "https://${API_ID}.execute-api.us-east-2.amazonaws.com/production/api/health" >> debug.txt 2>&1
           
-          echo "Response payload:" >> debug.txt
-          cat response.json >> debug.txt
-          
-          # Decode log tail
-          echo "=== STEP 5: Decoded Lambda Logs ===" >> debug.txt
-          cat invoke_meta.json | jq -r '.LogResult // empty' | base64 --decode >> debug.txt 2>&1 || echo "Could not decode logs" >> debug.txt
-          
-          # Step 6: List recent log streams
-          echo "=== STEP 6: Recent Log Streams ===" >> debug.txt
-          aws logs describe-log-streams \
-            --log-group-name "/aws/lambda/finai-api-v2-production-docker" \
-            --order-by "LastEventTime" \
-            --descending \
-            --limit 3 \
-            --query "logStreams[*].{Name: logStreamName, LastEvent: lastEventTimestamp}" \
-            --output json >> debug.txt 2>&1
-          
-          # Step 7: Fetch latest log events
-          echo "=== STEP 7: Latest Log Events ===" >> debug.txt
-          STREAM=$(aws logs describe-log-streams --log-group-name "/aws/lambda/finai-api-v2-production-docker" --order-by "LastEventTime" --descending --limit 1 --query "logStreams[0].logStreamName" --output text 2>/dev/null)
-          if [ -n "$STREAM" ] && [ "$STREAM" != "None" ]; then
-            aws logs get-log-events \
-              --log-group-name "/aws/lambda/finai-api-v2-production-docker" \
-              --log-stream-name "$STREAM" \
-              --limit 50 \
-              --query "events[*].message" \
-              --output text >> debug.txt 2>&1
-          fi
+          # Step 4: Test login via API Gateway
+          echo "=== STEP 4: Test login via API Gateway ===" >> debug.txt
+          curl -s -w "\nHTTP_CODE:%{http_code}\nTIME_TOTAL:%{time_total}s\n" \
+            -X POST "https://${API_ID}.execute-api.us-east-2.amazonaws.com/production/api/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"hassamshah18@gmail.com","password":"123456"}' >> debug.txt 2>&1
           
           # Send all to Supabase
           OUT_B64=$(cat debug.txt | jq -Rs .)
