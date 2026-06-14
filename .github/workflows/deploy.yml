@@ -40,97 +40,33 @@ jobs:
           terraform init
           terraform apply -auto-approve
 
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Create ECR Repository (if not exists)
+        run: |
+          aws ecr create-repository --repository-name finai-api-image --region us-east-2 || true
+
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: finai-api-image
+          IMAGE_TAG: latest
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
 
-      - name: Build & Deploy Flask Backend (Lambda via Zappa)
+      - name: Deploy Container-Based Lambda & Update API Gateway
         working-directory: ./backend
         run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install zappa
-
-          # 1. Fetch or publish the Lambda layer
-          LAYER_ARN=$(aws lambda list-layer-versions --layer-name finai-ml-layer-v3 --query "LayerVersions[0].LayerVersionArn" --output text 2>/dev/null || echo "")
-          if [ "$LAYER_ARN" = "None" ] || [ -z "$LAYER_ARN" ]; then
-            echo "Layer finai-ml-layer-v3 not found. Building layer..."
-            
-            # Create requirements-layer.txt
-            echo "pandas-datareader==0.10.0" > requirements-layer.txt
-            echo "PyPortfolioOpt==1.5.6" >> requirements-layer.txt
-            echo "cvxpy>=1.8.0" >> requirements-layer.txt
-            echo "yfinance==0.2.54" >> requirements-layer.txt
-            
-            mkdir -p layer/python
-            pip install -r requirements-layer.txt -t layer/python
-            
-            # Remove numpy, pandas, pyarrow, and scipy to stay under the 250MB unzipped limit
-            # (they are provided by Klayers scipy and pandas layers instead)
-            rm -rf layer/python/numpy*
-            rm -rf layer/python/scipy*
-            rm -rf layer/python/pyarrow*
-            rm -rf layer/python/pandas
-            rm -rf layer/python/pandas-*.dist-info
-            rm -rf layer/python/pandas.libs
-            
-            # Print sizes for debugging
-            echo "Layer directory contents and sizes:"
-            du -sh layer/python/* || true
-            
-            # Size reduction optimizations
-            find layer/python -type d -name "tests" -exec rm -rf {} + || true
-            find layer/python -type d -name "testing" -exec rm -rf {} + || true
-            find layer/python -type d -name "__pycache__" -exec rm -rf {} + || true
-            find layer/python -name "*.pyc" -delete || true
-            find layer/python -name "*.so" -exec strip {} + || true
-            
-            cd layer
-            zip -r ../ml-layer.zip python
-            cd ..
-            
-            echo "Uploading layer to S3..."
-            aws s3 cp ml-layer.zip s3://finai-zappa-deployments-bucket/ml-layer.zip
-            
-            echo "Publishing Lambda layer..."
-            LAYER_ARN=$(aws lambda publish-layer-version \
-              --layer-name finai-ml-layer-v3 \
-              --description "FinAI ML dependencies layer v3" \
-              --content S3Bucket=finai-zappa-deployments-bucket,S3Key=ml-layer.zip \
-              --compatible-runtimes python3.12 \
-              --query "LayerVersionArn" \
-              --output text)
-            echo "Layer published: $LAYER_ARN"
-          else
-            echo "Using existing layer: $LAYER_ARN"
-          fi
-
-          # 2. Update zappa_settings.json with the dynamic layer ARN and Klayers scipy/pandas layers
-          python -c "import json; f=open('zappa_settings.json', 'r'); d=json.load(f); f.close(); d['production']['layers'] = ['arn:aws:lambda:us-east-2:770693421928:layer:Klayers-p312-scipy:3', 'arn:aws:lambda:us-east-2:770693421928:layer:Klayers-p312-pandas:17', '$LAYER_ARN']; f=open('zappa_settings.json', 'w'); json.dump(d, f, indent=4); f.close()"
-
-          # 3. Zappa deploy / update
-          if ! zappa update production; then
-            echo "First update attempt failed. Adding API Gateway invocation permission..."
-            aws lambda add-permission \
-              --function-name finai-api-v2-production \
-              --statement-id AllowAPIGatewayInvoke \
-              --action lambda:InvokeFunction \
-              --principal apigateway.amazonaws.com || true
-            
-            if ! zappa update production; then
-              if ! zappa deploy production; then
-                echo "Deployment failed! Invoking Lambda directly to get traceback..."
-                aws lambda invoke --function-name finai-api-v2-production --payload '{"path": "/", "httpMethod": "GET"}' --cli-binary-format raw-in-base64-out response.json || true
-                cat response.json || true
-                echo "Fetching logs..."
-                aws logs tail /aws/lambda/finai-api-v2-production || true
-                exit 1
-              fi
-            fi
-          fi
+          pip install boto3
+          python deploy_lambda.py
           
       - name: Install Node.js
         uses: actions/setup-node@v3

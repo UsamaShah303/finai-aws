@@ -14,3 +14,4 @@ requests==2.32.3
 
 gunicorn==21.2.0
 pandas-datareader==0.10.0 
+aws-lambda-wsgi==0.1.1
