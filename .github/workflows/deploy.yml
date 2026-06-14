@@ -109,7 +109,7 @@ jobs:
           fi
 
           # 2. Update zappa_settings.json with the dynamic layer ARN and Klayers scipy/pandas layers
-          python -c "import json; f=open('zappa_settings.json', 'r'); d=json.load(f); f.close(); d['production']['layers'] = ['arn:aws:lambda:us-east-2:770693421928:layer:Klayers-p312-scipy:3', 'arn:aws:lambda:us-east-2:770693421928:layer:Klayers-p312-pandas:17', '$LAYER_ARN']; f=open('zappa_settings.json', 'w'); json.dump(d, f, indent=4); f.close()""
+          python -c "import json; f=open('zappa_settings.json', 'r'); d=json.load(f); f.close(); d['production']['layers'] = ['arn:aws:lambda:us-east-2:770693421928:layer:Klayers-p312-scipy:3', 'arn:aws:lambda:us-east-2:770693421928:layer:Klayers-p312-pandas:17', '$LAYER_ARN']; f=open('zappa_settings.json', 'w'); json.dump(d, f, indent=4); f.close()"
 
           # 3. Zappa deploy / update
           if ! zappa update production; then
