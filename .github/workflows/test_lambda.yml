@@ -9,11 +9,6 @@ jobs:
   test-lambda:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -21,23 +16,83 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2
 
-      - name: Fetch CloudWatch Logs
+      - name: Debug Lambda State
         run: |
-          # Fetch logs
-          echo "Fetching latest Lambda logs..."
-          STREAM=$(aws logs describe-log-streams --log-group-name "/aws/lambda/finai-api-v2-production-docker" --order-by "LastEventTime" --descending --limit 1 --query "logStreams[0].logStreamName" --output text 2>/dev/null || echo "not-found")
-          if [ "$STREAM" != "not-found" ] && [ "$STREAM" != "None" ]; then
-            aws logs get-log-events --log-group-name "/aws/lambda/finai-api-v2-production-docker" --log-stream-name "$STREAM" --limit 100 --query "events[*].message" --output text > logs.txt
-          else
-            echo "No log stream found yet." > logs.txt
-          fi
-          
-          # Save content to Supabase to read it
-          OUT_B64=$(cat logs.txt | jq -Rs .)
           SUPA_URL="https://iaozluyveedsascwjgsv.supabase.co"
           SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlhb3psdXl2ZWVkc2FzY3dqZ3N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMjI2OTcsImV4cCI6MjA5NDY5ODY5N30.1MErkTaUBL4NMYWM2bx8sWky5KID6tADhXWeqwRV0Hs"
           
-          curl -X PATCH "$SUPA_URL/rest/v1/users?email=eq.hassamshah18@gmail.com" \
+          # Step 1: Check Lambda last modified
+          echo "=== STEP 1: Lambda Config ===" > debug.txt
+          aws lambda get-function-configuration \
+            --function-name finai-api-v2-production-docker \
+            --query "{LastModified: LastModified, CodeSize: CodeSize, State: State, LastUpdateStatus: LastUpdateStatus, ImageUri: Code.ImageUri}" \
+            --output json >> debug.txt 2>&1
+          
+          # Step 2: Force update Lambda to latest image
+          echo "=== STEP 2: Force Update Lambda Code ===" >> debug.txt
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          aws lambda update-function-code \
+            --function-name finai-api-v2-production-docker \
+            --image-uri ${ACCOUNT_ID}.dkr.ecr.us-east-2.amazonaws.com/finai-api-image:latest \
+            --region us-east-2 >> debug.txt 2>&1
+          
+          # Wait for update
+          echo "Waiting for Lambda update..." >> debug.txt
+          sleep 15
+          
+          # Step 3: Check state after update
+          echo "=== STEP 3: Lambda State After Update ===" >> debug.txt
+          aws lambda get-function-configuration \
+            --function-name finai-api-v2-production-docker \
+            --query "{LastModified: LastModified, State: State, LastUpdateStatus: LastUpdateStatus}" \
+            --output json >> debug.txt 2>&1
+          
+          # Step 4: Invoke Lambda directly (cold start)
+          echo "=== STEP 4: Direct Lambda Invocation ===" >> debug.txt
+          aws lambda invoke \
+            --function-name finai-api-v2-production-docker \
+            --payload '{"resource": "/api/health", "path": "/api/health", "httpMethod": "GET", "headers": {"Host": "test.execute-api.us-east-2.amazonaws.com"}, "requestContext": {"resourcePath": "/api/health", "httpMethod": "GET", "path": "/production/api/health", "stage": "production"}, "body": null, "isBase64Encoded": false}' \
+            --cli-binary-format raw-in-base64-out \
+            --log-type Tail \
+            --query '{StatusCode: StatusCode, FunctionError: FunctionError, LogResult: LogResult}' \
+            --output json \
+            response.json >> invoke_meta.json 2>&1
+          
+          echo "Invoke metadata:" >> debug.txt
+          cat invoke_meta.json >> debug.txt
+          
+          echo "Response payload:" >> debug.txt
+          cat response.json >> debug.txt
+          
+          # Decode log tail
+          echo "=== STEP 5: Decoded Lambda Logs ===" >> debug.txt
+          cat invoke_meta.json | jq -r '.LogResult // empty' | base64 --decode >> debug.txt 2>&1 || echo "Could not decode logs" >> debug.txt
+          
+          # Step 6: List recent log streams
+          echo "=== STEP 6: Recent Log Streams ===" >> debug.txt
+          aws logs describe-log-streams \
+            --log-group-name "/aws/lambda/finai-api-v2-production-docker" \
+            --order-by "LastEventTime" \
+            --descending \
+            --limit 3 \
+            --query "logStreams[*].{Name: logStreamName, LastEvent: lastEventTimestamp}" \
+            --output json >> debug.txt 2>&1
+          
+          # Step 7: Fetch latest log events
+          echo "=== STEP 7: Latest Log Events ===" >> debug.txt
+          STREAM=$(aws logs describe-log-streams --log-group-name "/aws/lambda/finai-api-v2-production-docker" --order-by "LastEventTime" --descending --limit 1 --query "logStreams[0].logStreamName" --output text 2>/dev/null)
+          if [ -n "$STREAM" ] && [ "$STREAM" != "None" ]; then
+            aws logs get-log-events \
+              --log-group-name "/aws/lambda/finai-api-v2-production-docker" \
+              --log-stream-name "$STREAM" \
+              --limit 50 \
+              --query "events[*].message" \
+              --output text >> debug.txt 2>&1
+          fi
+          
+          # Send all to Supabase
+          OUT_B64=$(cat debug.txt | jq -Rs .)
+          curl -s -X PATCH "$SUPA_URL/rest/v1/users?email=eq.hassamshah18@gmail.com" \
                -H "apikey: $SUPA_KEY" \
                -H "Authorization: Bearer $SUPA_KEY" \
                -H "Content-Type: application/json" \
