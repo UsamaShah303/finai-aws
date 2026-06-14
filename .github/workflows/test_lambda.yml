@@ -1,0 +1,36 @@
+name: Test Lambda Function
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-lambda:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+
+      - name: Invoke Lambda
+        run: |
+          # Encode payload as base64 for cli compatibility across OS
+          aws lambda invoke \
+            --function-name finai-api-v2-production-docker \
+            --payload '{"resource": "/api/health", "path": "/api/health", "httpMethod": "GET", "headers": {}, "multiValueHeaders": {}, "queryStringParameters": null, "multiValueQueryStringParameters": null, "pathParameters": null, "stageVariables": null, "requestContext": {"resourceId": "123456", "resourcePath": "/api/health", "httpMethod": "GET", "extendedRequestId": "request-id", "requestTime": "14/Jun/2026:07:00:00 +0000", "path": "/production/api/health", "accountId": "123456789012", "protocol": "HTTP/1.1", "stage": "production", "domainPrefix": "api", "requestTimeEpoch": 1718348400000, "requestId": "request-id", "identity": {"cognitoIdentityPoolId": null, "accountId": null, "cognitoIdentityId": null, "caller": null, "sourceIp": "127.0.0.1", "principalOrgId": null, "accessKey": null, "cognitoAuthenticationType": null, "cognitoAuthenticationProvider": null, "userArn": null, "userAgent": "Custom User Agent String", "user": null}, "domainName": "api.example.com", "apiId": "api-id"}, "body": null, "isBase64Encoded": false}' \
+            --cli-binary-format raw-in-base64-out \
+            --log-type Tail \
+            output.json > invoke_result.json
+          
+          echo "=== Invoke Result ==="
+          cat invoke_result.json
+          
+          echo "=== Log Tail (Base64 Decoded) ==="
+          cat invoke_result.json | jq -r '.LogResult' | base64 --decode
+          
+          echo "=== Output Payload ==="
+          cat output.json
