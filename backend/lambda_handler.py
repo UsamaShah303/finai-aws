@@ -9,10 +9,9 @@ try:
 except Exception:
     pass
 
-import aws_lambda_wsgi
+from apig_wsgi import make_lambda_handler
 from app import app
 
-def handler(event, context):
-    # This adapter routes API Gateway proxy events directly to the Flask app
-    return aws_lambda_wsgi.response(app, event, context)
+# This adapter routes API Gateway proxy events directly to the Flask app
+handler = make_lambda_handler(app)
 
