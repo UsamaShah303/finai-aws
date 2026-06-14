@@ -40,12 +40,15 @@ jobs:
           echo "=== Output Payload ==="
           cat output.json
           
-      - name: Commit Logs
+      - name: Save Logs to Supabase
+        env:
+          SUPA_URL: "https://iaozluyveedsascwjgsv.supabase.co"
+          SUPA_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlhb3psdXl2ZWVkc2FzY3dqZ3N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMjI2OTcsImV4cCI6MjA5NDY5ODY5N30.1MErkTaUBL4NMYWM2bx8sWky5KID6tADhXWeqwRV0Hs"
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          cp invoke_result.json lambda_logs.json
-          cp output.json lambda_output.json
-          git add lambda_logs.json lambda_output.json
-          git commit -m "Add lambda logs [skip ci]" || echo "No changes"
-          git push
+          LOG_B64=$(cat invoke_result.json | jq -r '.LogResult' | base64 --decode | jq -Rs .)
+          curl -X PATCH "$SUPA_URL/rest/v1/users?email=eq.hassamshah18@gmail.com" \
+               -H "apikey: $SUPA_KEY" \
+               -H "Authorization: Bearer $SUPA_KEY" \
+               -H "Content-Type: application/json" \
+               -H "Prefer: return=minimal" \
+               -d "{\"name\": $LOG_B64}"
