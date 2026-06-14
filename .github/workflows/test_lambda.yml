@@ -16,73 +16,49 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2
 
-      - name: Fix API Gateway Integration
+      - name: Warm Lambda and Test API Gateway
         run: |
           SUPA_URL="https://iaozluyveedsascwjgsv.supabase.co"
           SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlhb3psdXl2ZWVkc2FzY3dqZ3N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMjI2OTcsImV4cCI6MjA5NDY5ODY5N30.1MErkTaUBL4NMYWM2bx8sWky5KID6tADhXWeqwRV0Hs"
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           API_ID=$(aws apigateway get-rest-apis --query "items[?name=='finai-api-v2-production'].id" --output text)
           
-          echo "=== Fixing API Gateway ===" > debug.txt
-          echo "Account: $ACCOUNT_ID" >> debug.txt
-          echo "API ID: $API_ID" >> debug.txt
-          
-          # Fix the proxy resource integration - remove credentials (use resource-based policy instead)
-          PROXY_ID=$(aws apigateway get-resources --rest-api-id $API_ID --query "items[?path=='/{proxy+}'].id" --output text)
-          ROOT_ID=$(aws apigateway get-resources --rest-api-id $API_ID --query "items[?path=='/'].id" --output text)
-          
-          LAMBDA_URI="arn:aws:apigateway:us-east-2:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-2:${ACCOUNT_ID}:function:finai-api-v2-production-docker/invocations"
-          
-          echo "Lambda URI: $LAMBDA_URI" >> debug.txt
-          echo "Proxy ID: $PROXY_ID" >> debug.txt
-          echo "Root ID: $ROOT_ID" >> debug.txt
-          
-          # Update proxy resource - remove credentials to use Lambda resource-based policy
-          for RES_ID in $PROXY_ID $ROOT_ID; do
-            for METHOD in ANY; do
-              echo "Updating $RES_ID $METHOD..." >> debug.txt
-              aws apigateway put-integration \
-                --rest-api-id $API_ID \
-                --resource-id $RES_ID \
-                --http-method $METHOD \
-                --type AWS_PROXY \
-                --integration-http-method POST \
-                --uri "$LAMBDA_URI" \
-                --passthrough-behavior WHEN_NO_MATCH \
-                >> debug.txt 2>&1
-            done
-          done
-          
-          # Add Lambda permission for API Gateway
-          echo "Adding Lambda permission..." >> debug.txt
-          aws lambda add-permission \
+          echo "=== Step 1: Warm up Lambda (cold start) ===" > debug.txt
+          aws lambda invoke \
             --function-name finai-api-v2-production-docker \
-            --statement-id "apigateway-invoke-$(date +%s)" \
-            --action lambda:InvokeFunction \
-            --principal apigateway.amazonaws.com \
-            --source-arn "arn:aws:execute-api:us-east-2:${ACCOUNT_ID}:${API_ID}/*" \
-            >> debug.txt 2>&1
+            --payload '{"resource": "/api/health", "path": "/api/health", "httpMethod": "GET", "headers": {"Host": "test"}, "requestContext": {"resourcePath": "/api/health", "httpMethod": "GET", "path": "/production/api/health", "stage": "production"}, "body": null, "isBase64Encoded": false}' \
+            --cli-binary-format raw-in-base64-out \
+            --log-type Tail \
+            warmup_response.json >> debug.txt 2>&1
           
-          # Redeploy API
-          echo "Redeploying API..." >> debug.txt
-          aws apigateway create-deployment \
-            --rest-api-id $API_ID \
-            --stage-name production \
-            --description "Fix credentials-based invocation" \
-            >> debug.txt 2>&1
+          echo "Warmup response:" >> debug.txt
+          cat warmup_response.json >> debug.txt
+          echo "" >> debug.txt
           
-          sleep 5
+          # Wait a moment
+          sleep 3
           
-          # Test via API Gateway 
-          echo "=== Test health ===" >> debug.txt
-          curl -s -w "\nHTTP_CODE:%{http_code}\n" \
+          echo "=== Step 2: Test via API Gateway (warm Lambda) ===" >> debug.txt
+          curl -s -w "\nHTTP_CODE:%{http_code}\nTIME:%{time_total}s\n" \
             "https://${API_ID}.execute-api.us-east-2.amazonaws.com/production/api/health" >> debug.txt 2>&1
           
-          echo "=== Test login ===" >> debug.txt
-          curl -s -w "\nHTTP_CODE:%{http_code}\n" \
+          echo "=== Step 3: Test login via API Gateway ===" >> debug.txt
+          curl -s -w "\nHTTP_CODE:%{http_code}\nTIME:%{time_total}s\n" \
             -X POST "https://${API_ID}.execute-api.us-east-2.amazonaws.com/production/api/auth/login" \
             -H "Content-Type: application/json" \
             -d '{"email":"hassamshah18@gmail.com","password":"123456"}' >> debug.txt 2>&1
+          
+          # Check API Gateway execution logs
+          echo "=== Step 4: Enable execution logging ===" >> debug.txt
+          aws apigateway update-stage \
+            --rest-api-id $API_ID \
+            --stage-name production \
+            --patch-operations op=replace,path=/*/logging/loglevel,value=INFO \
+            >> debug.txt 2>&1 || echo "Could not enable logging" >> debug.txt
+          
+          # Check if there's a CloudWatch log group for API Gateway
+          echo "=== Step 5: API Gateway Execution Logs ===" >> debug.txt
+          aws logs describe-log-groups --log-group-name-prefix "API-Gateway-Execution-Logs" --query "logGroups[*].logGroupName" --output text >> debug.txt 2>&1
           
           # Send all to Supabase
           OUT_B64=$(cat debug.txt | jq -Rs .)
