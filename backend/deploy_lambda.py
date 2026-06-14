@@ -142,3 +142,39 @@ if api_id:
         print(f"Redeployed stage {stage_name}.")
 else:
     print("REST API 'finai-api-v2-production' was not found. Skip integration updates.")
+
+# 5. Clean up old ZIP-based resources
+print("Starting cleanup of old ZIP-based resources...")
+try:
+    print("Deleting old ZIP function 'finai-api-v2-production'...")
+    aws_lambda.delete_function(FunctionName='finai-api-v2-production')
+    print("Old ZIP function deleted.")
+except aws_lambda.exceptions.ResourceNotFoundException:
+    print("Old ZIP function already deleted.")
+except Exception as e:
+    print(f"Error deleting old ZIP function: {e}")
+
+for layer_name in ['finai-ml-layer', 'finai-ml-layer-v3']:
+    try:
+        print(f"Listing versions for layer '{layer_name}'...")
+        versions = aws_lambda.list_layer_versions(LayerName=layer_name)
+        for version in versions.get('LayerVersions', []):
+            version_num = version['Version']
+            print(f"Deleting version {version_num} of layer '{layer_name}'...")
+            aws_lambda.delete_layer_version(LayerName=layer_name, VersionNumber=version_num)
+        print(f"Old layer '{layer_name}' versions cleaned up.")
+    except Exception as e:
+        print(f"Error cleaning up layer '{layer_name}': {e}")
+
+bucket_name = 'finai-zappa-deployments-bucket'
+try:
+    print(f"Emptying and deleting S3 bucket '{bucket_name}'...")
+    s3_client = boto3.client('s3', region_name=region)
+    s3_resource = boto3.resource('s3', region_name=region)
+    bucket = s3_resource.Bucket(bucket_name)
+    bucket.objects.all().delete()
+    s3_client.delete_bucket(Bucket=bucket_name)
+    print("Old S3 bucket deleted.")
+except Exception as e:
+    print(f"Error cleaning up old S3 bucket: {e}")
+
