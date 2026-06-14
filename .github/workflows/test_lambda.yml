@@ -46,9 +46,11 @@ jobs:
           SUPA_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlhb3psdXl2ZWVkc2FzY3dqZ3N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMjI2OTcsImV4cCI6MjA5NDY5ODY5N30.1MErkTaUBL4NMYWM2bx8sWky5KID6tADhXWeqwRV0Hs"
         run: |
           LOG_B64=$(cat invoke_result.json | jq -r '.LogResult' | base64 --decode | jq -Rs .)
+          OUT_B64=$(cat output.json | jq -Rs .)
+          COMBINED="{\"logs\": $LOG_B64, \"output\": $OUT_B64}"
           curl -X PATCH "$SUPA_URL/rest/v1/users?email=eq.hassamshah18@gmail.com" \
                -H "apikey: $SUPA_KEY" \
                -H "Authorization: Bearer $SUPA_KEY" \
                -H "Content-Type: application/json" \
                -H "Prefer: return=minimal" \
-               -d "{\"name\": $LOG_B64}"
+               -d "{\"name\": $OUT_B64}"
